@@ -6,6 +6,10 @@ import sys
 from Helpers import neuron_local_gain_update
 
 class MLP:
+    """
+    Multilayer Perceptron (MLP) with backward propagation of errors training algorithm
+    """
+
     # rows are weights of neuron in layer
     # first column is biases, equal to 1
     W = None
@@ -18,7 +22,7 @@ class MLP:
                  rng=(lambda n: np.random.normal(0, 0.1, n))
     ):
         """
-        Initialization of neural network
+        Initialization of MLP
         :param input_dimension: input dimension of data without bias
         :param layers_structure: tuple of integers, each value is count of neurons in the layer
         :param activation_functions: tuple of actiovation functions for each of layers, if None then sigmoid is chosen; ndarray -> ndarray
@@ -55,7 +59,7 @@ class MLP:
         return input_data
 
     def __str__(self):
-        return "MLP: " + str(self.W[0].shape[1] - 1) + "->" + "->".join(map(lambda m: str(m.shape[0]), self.W))
+        return "MLP: " + str(self.W[0].shape[1] - 1) + " -> " + " -> ".join(map(lambda m: str(m.shape[0]), self.W))
 
     def train_backprop(self,
                        input_data, # ndarray
@@ -80,6 +84,39 @@ class MLP:
                        cv_goal = None,
                        add_bias = True,
                        verbose=True):
+        """
+        Train MLP with error back propagation algorithm
+        :param input_data: numpy ndarray
+        :param output_data: numpy ndarray
+        :param learning_rate: small number
+        :param momentum_rate: small number
+        :param regularization_rate: small number
+        :param regularization_norm: norm to penalize model, if set then it will be included in cost
+        :param d_regularization_norm: derivative of norm to penalize model, if set then it will be takken into account
+        in error calculation
+        :param neural_local_gain: tuple (bonus, penalty, min, max), type of adaptive learning rate;
+        https://www.cs.toronto.edu/~hinton/csc321/notes/lec9.pdf
+        :param batch_size: 1 - online learning, n < input_data.shape[0] - batch learning,
+        None or input_data.shape[0] - full batch learning
+        :param max_iter: maximum number of iteration
+        :param min_train_cost: minimum value of cost on train set
+        :param min_cv_cost: minimum value of cost on crossvalidation set
+        :param n_iter_stop_skip: number of iteration skip shecking of stop conditions
+        :param stop_threshold: stop training if (1 - stop_threshold)*(current cost) > min(cost);
+        is crossvalidation set presented then cv_cost is used
+        :param tolerance: minimum step of cost
+        :param goal: train cost function f: ndarray_NxM -> array_N, N - number of examples;
+         in other words it returns cost for each of examples
+        :param d_goal: partial derivative of goal with respect to outputs df: ndarray_NxM -> ndarray_NxM;
+        in other words it returns matrix of values of derivatives for each example and for each dimension
+        :param d_f_list: list of derivatives of activation functions of each of layers
+        :param cv_input_data: numpy ndarry
+        :param cv_output_data: numpy ndarry
+        :param cv_goal: crossvalidation cost function, is used for stop conditioning if presented
+        :param add_bias: use biases
+        :param verbose: logging
+        :return: values of cost in each of iterations, if cv_cost is set then also returned list of cv_goal values
+        """
         if d_f_list is None:
             d_f_list = [d_sigmoid] * len(self.W)
         if add_bias:
