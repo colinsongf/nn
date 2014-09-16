@@ -3,16 +3,7 @@ from Functions import *
 from Distances import *
 import time
 import sys
-
-@np.vectorize
-def neuron_local_gain_update(r, c, bonus, penalty, rmin, rmax):
-    '''
-    update neurons local gain due to condition matrix
-    :param r: neurons local gain
-    :param c: condition matrix
-    :return: new values of neurons local gain
-    '''
-    return min(bonus + r, rmax) if c else max(penalty * r, rmin)
+from Helpers import neuron_local_gain_update
 
 class MLP:
     # rows are weights of neuron in layer
@@ -64,7 +55,7 @@ class MLP:
         return input_data
 
     def __str__(self):
-        return "FeedforwardNN: " + str(self.W[0].shape[1] - 1) + "->" + "->".join(map(lambda m: str(m.shape[0]), self.W))
+        return "MLP: " + str(self.W[0].shape[1] - 1) + "->" + "->".join(map(lambda m: str(m.shape[0]), self.W))
 
     def train_backprop(self,
                        input_data, # ndarray
@@ -74,7 +65,7 @@ class MLP:
                        regularization_rate = 0.1,
                        regularization_norm = None,
                        d_regularization_norm = None,
-                       neural_local_gain = (0.05, 0.95, 0.1, 10),  # bonus, penalty, min, max
+                       neural_local_gain = None, # bonus, penalty, min, max
                        batch_size = None, # None = full batch
                        max_iter = 10000,
                        min_train_cost = np.finfo(float).eps,
@@ -90,7 +81,7 @@ class MLP:
                        add_bias = True,
                        verbose=True):
         if d_f_list is None:
-            d_f_list = map(lambda x: lambda m: sigmoid(m), range(len(self.W)))
+            d_f_list = [d_sigmoid] * len(self.W)
         if add_bias:
             input_data = np.c_[np.ones(input_data.shape[0]), input_data]
         if batch_size is None:
@@ -101,7 +92,7 @@ class MLP:
             cv_goal = goal
         last_delta_W = [np.zeros(np.prod(m.shape)).reshape(m.shape) for m in self.W]
         # neural local gain: learning rate modifier for each of weights in network
-        nlg = [np.ones(np.prod(m.shape)).reshape(m.shape) for m in self.W] if neural_local_gain is not None else None
+        nlg = [np.ones(m.shape) for m in self.W] if neural_local_gain is not None else None
         cost = []
         cv_cost = []
         do_cv = cv_input_data is not None and cv_output_data is not None
@@ -113,7 +104,7 @@ class MLP:
             np.random.shuffle(idx_data)
             idx_batch = range(0, len(idx_data), batch_size)
             for i_in_batch in idx_batch:
-                batch_data = input_data[i_in_batch:min(i_in_batch + batch_size, len(idx_data)), :]
+                batch_data = input_data[idx_data[i_in_batch:(i_in_batch + batch_size)], :]
 
                 # forward pass
                 z = []
@@ -127,13 +118,13 @@ class MLP:
                         tmp_data = np.c_[np.ones(tmp_data.shape[0]), tmp_data]
 
                 # backward pass
-                nabla_W = [np.zeros(np.prod(m.shape)).reshape(m.shape) for m in self.W]
+                nabla_W = [None] * len(self.W)
                 dE_dz_next = None
                 for i_layer in reversed(range(len(self.W))):
                     dE_dz = None
                     if dE_dz_next is None:
                         # output layer
-                        dE_dz = d_goal(output_data[i_in_batch:min(i_in_batch + batch_size, len(idx_data)), :], f_z[-1]) * \
+                        dE_dz = d_goal(output_data[idx_data[i_in_batch:(i_in_batch + batch_size)], :], f_z[-1]) * \
                                 (1.0 if d_goal == d_cross_entropy else d_f_list[i_layer](z[i_layer]))
                         dE_dz_next = dE_dz
                     else:
@@ -147,13 +138,7 @@ class MLP:
                         layer_input_data = batch_data
                     else:
                         layer_input_data = np.c_[np.ones(f_z[i_layer - 1].shape[0]), f_z[i_layer - 1]]
-                    for i_in_batch_back in range(batch_data.shape[0]):
-                        r_dE_dz = np.repeat(dE_dz[i_in_batch_back, :],
-                                            self.W[i_layer].shape[1]).reshape(self.W[i_layer].shape)
-                        r_layer_input_data = np.repeat(layer_input_data[i_in_batch_back, :],
-                                                       self.W[i_layer].shape[0]).reshape(self.W[i_layer].shape, order='F')
-                        nabla_W[i_layer] += r_dE_dz * r_layer_input_data
-                nabla_W = [w / batch_size for w in nabla_W]
+                    nabla_W[i_layer] = np.dot(layer_input_data.T, dE_dz).T / batch_size
 
                 # update weights
                 for i_layer in range(len(self.W)):
@@ -166,7 +151,7 @@ class MLP:
                         (0.0 if d_regularization_norm is None else regularization_rate * regularization_penalty)  # regularization
                     )
                     if nlg is not None:
-                        c = delta_W * last_delta_W[i_layer] > 0
+                        c = delta_W * last_delta_W[i_layer] >= 0
                         nlg[i_layer] = neuron_local_gain_update(nlg[i_layer], c, nlg_bonus, nlg_penalty, nlg_min, nlg_max)
                     self.W[i_layer] -= delta_W
                     last_delta_W[i_layer] = delta_W
@@ -198,7 +183,7 @@ class MLP:
                         break
                 if cost[-1] <= min_train_cost:
                     break
-                if cv_cost[-1] <= min_cv_cost:
+                if len(cv_cost) > 0 and cv_cost[-1] <= min_cv_cost:
                     break
                 if len(cost) > 1 and abs(cost[-1] - cost[-2]) < tolerance:
                     break
