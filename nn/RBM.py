@@ -9,6 +9,7 @@ class RBM:
     W = None # weights of network, rows are weights of visible layer
     a = None # biases of visible layer
     b = None # biases of hidden layer
+    mode = 'bin-bin'
     use_biases = True
 
     def __str__(self):
@@ -19,12 +20,17 @@ class RBM:
                  visible_size,
                  hidden_size,
                  rng=(lambda n: np.random.normal(0, 0.1, n)),
+                 mode='bin-bin', # gaus-bin (gaussian <-> bernoulli), bin-bin (bernoulli <-> bernoulli or binary-binary)
                  use_biases=True
     ):
         self.W = rng(visible_size * hidden_size).reshape((visible_size, hidden_size))
         self.a = rng(visible_size)
         self.b = rng(hidden_size)
         self.use_biases = use_biases
+        if mode not in ['bin-bin', 'gaus-bin']:
+            raise Exception('unsupported mode')
+        else:
+            self.mode = mode
 
     def sample(self, m):
         return (np.random.uniform(0, 1, m.shape) < m).astype(float)
@@ -40,6 +46,8 @@ class RBM:
 
 
     def generate_input(self, input_data, do_sampling=False):
+        if self.mode == 'gaus-bin':
+            return np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.a, self.W.T)))
         if self.use_biases:
             v = sigmoid(np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.a, self.W.T))))
         else:
@@ -59,7 +67,7 @@ class RBM:
               goal = euclidian,
               cv_input_data = None,
               regularization_rate = 0.1,
-              regularization_norm = None,
+              #regularization_norm = None,
               d_regularization_norm = None,
               neural_local_gain = None,
               do_visible_sampling=False,
@@ -98,7 +106,10 @@ class RBM:
                         # accumulate negative phase
                         nabla_W -= np.dot(v.T, h)
                         if self.use_biases:
-                            nabla_a -= np.sum(v, axis=0)
+                            if self.mode == 'bin-bin':
+                                nabla_a -= np.sum(v, axis=0)
+                            elif self.mode == 'gaus-bin':
+                                nabla_a -= np.sum(np.repeat(self.a, v.shape[0]).reshape((v.shape[0], v.shape[1]), order='F'), axis=0)
                             nabla_b -= np.sum(h, axis=0)
                         break
                     h = self.sample(h)
@@ -106,7 +117,10 @@ class RBM:
                         # accumulate positive phase
                         nabla_W += np.dot(v.T, h)
                         if self.use_biases:
-                            nabla_a += np.sum(v, axis=0)
+                            if self.mode == 'bin-bin':
+                                nabla_a += np.sum(v, axis=0)
+                            elif self.mode == 'gaus-bin':
+                                nabla_a += np.sum(np.repeat(self.a, v.shape[0]).reshape((v.shape[0], v.shape[1]), order='F'), axis=0)
                             nabla_b += np.sum(h, axis=0)
 
                     v = self.generate_input(h, do_sampling=False)
