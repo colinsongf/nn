@@ -48,3 +48,9 @@ def cross_entropy(t, y):
 
 def d_cross_entropy(t, y):
     return y - t
+
+def euclidian(t, y):
+    return np.sqrt(np.sum((t - y) ** 2, axis=1))
+
+def hamming(t, y):
+    return np.sum(np.abs(t - y), axis=1)
