@@ -1,4 +1,4 @@
 nn
 ==
 
-implementation of MLP and RBM for students needs
+implementation of Multilayer Perceptron (MLP) and Restricted Boltzmann Machine (RBM) for students needs
