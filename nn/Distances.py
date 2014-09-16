@@ -31,6 +31,11 @@ def log_Bernoulli_likelihood_elements(t, y):
 
 
 def log_Bernoulli_likelihood(t, y):
+    """
+    -sum( t * log(y) + (1 - t) * log(1 - y) )
+    :param t: target values
+    :param y: predicted values
+    """
     return -np.sum(log_Bernoulli_likelihood_elements(t, y), axis=1)
 
 @np.vectorize
@@ -44,6 +49,11 @@ def cross_entropy_elements(t, y):
     return t * (np.log(np.finfo(float).eps) if y == 0 else np.log(y))
 
 def cross_entropy(t, y):
+    """
+    -sum( t * log(y) )
+    :param t: target values
+    :param y: predicted values
+    """
     return -np.sum(cross_entropy_elements(t, y), axis=1)
 
 def d_cross_entropy(t, y):

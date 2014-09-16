@@ -6,6 +6,10 @@ from Helpers import neuron_local_gain_update
 
 
 class RBM:
+    """
+    Restricted Boltzmann Machine (RBM) with contrastive divergence training algorithm
+    """
+
     W = None # weights of network, rows are weights of visible layer
     a = None # biases of visible layer
     b = None # biases of hidden layer
@@ -13,7 +17,7 @@ class RBM:
     use_biases = True
 
     def __str__(self):
-        return "RBM: " + str(self.W.shape[0]) + '<->' + str(self.W.shape[1])
+        return "RBM: " + str(self.W.shape[0]) + ' <-> ' + str(self.W.shape[1])
 
 
     def __init__(self,
@@ -23,6 +27,15 @@ class RBM:
                  mode='bin-bin', # gaus-bin (gaussian <-> bernoulli), bin-bin (bernoulli <-> bernoulli or binary-binary)
                  use_biases=True
     ):
+        """
+        Initialization of RBM
+        :param visible_size: input space dimension
+        :param hidden_size: hidden space dimension
+        :param rng: function that returns numpy array of n random numbers
+        :param mode: mode of network: gaus-bin (gaussian <-> bernoulli), bin-bin (bernoulli <-> bernoulli or binary-binary)
+        :param use_biases: use biases in calculations
+        :return:
+        """
         self.W = rng(visible_size * hidden_size).reshape((visible_size, hidden_size))
         self.a = rng(visible_size)
         self.b = rng(hidden_size)
@@ -33,9 +46,20 @@ class RBM:
             self.mode = mode
 
     def sample(self, m):
+        """
+        Sample 0 or 1 with respect to given matrix of probabilities
+        :param m: matrix of probabilities
+        :return: binary matrix with same shape
+        """
         return (np.random.uniform(0, 1, m.shape) < m).astype(float)
 
     def compute_output(self, input_data, do_sampling=True):
+        """
+        Compute hidden state
+        :param input_data: numpy ndarray
+        :param do_sampling: do binary sample or not
+        :return: data representation in hidden space
+        """
         if self.use_biases:
             h = sigmoid(np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.b, self.W))))
         else:
@@ -46,6 +70,12 @@ class RBM:
 
 
     def generate_input(self, input_data, do_sampling=False):
+        """
+        Restore input data using hidden space representation
+        :param input_data: data representation in hidden space
+        :param do_sampling: do_sampling: do binary sample or not (doesn't matter in gaus-bin mode)
+        :return: data representation in original space
+        """
         if self.mode == 'gaus-bin':
             return np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.a, self.W.T)))
         if self.use_biases:
@@ -67,7 +97,7 @@ class RBM:
               goal = euclidian,
               cv_input_data = None,
               regularization_rate = 0.1,
-              #regularization_norm = None,
+              regularization_norm = None,
               d_regularization_norm = None,
               neural_local_gain = None,
               do_visible_sampling=False,
@@ -76,6 +106,35 @@ class RBM:
               min_cv_cost = np.finfo(float).eps,
               tolerance=0,
               verbose=True):
+        """
+        Train RBM with contrastive divergence algorithm
+        :param input_data: numpy ndarray
+        :param cd_k: number of iterations in Gibbs sampling
+        :param learning_rate: small number
+        :param momentum_rate: small number
+        :param max_iter: maximum number of iteration
+        :param batch_size: 1 - online learning, n < input_data.shape[0] - batch learning,
+        None or input_data.shape[0] - full batch learning
+        :param stop_threshold: stop training if (1 - stop_threshold)*(current cost) > min(cost);
+        is crossvalidation set presented then cv_cost is used
+        :param goal: train cost function f: ndarray_NxM -> array_N, N - number of examples;
+         in other words it returns cost for each of examples
+        :param cv_input_data: numpy ndarry
+        :param regularization_rate: small number
+        :param regularization_norm: norm to penalize model, if set then it will be included in cost
+        :param d_regularization_norm: derivative of norm to penalize model, if set then it will be takken into account
+        in error calculation
+        :param neural_local_gain: tuple (bonus, penalty, min, max), type of adaptive learning rate;
+        https://www.cs.toronto.edu/~hinton/csc321/notes/lec9.pdf
+        :param do_visible_sampling: do sampling of visible units in contrastive divergence,
+        http://www.cs.toronto.edu/~hinton/absps/guideTR.pdf 3.2 Updating the visible states (page 6)
+        :param n_iter_stop_skip: number of iteration skip shecking of stop conditions
+        :param min_train_cost: minimum value of cost on train set
+        :param min_cv_cost: minimum value of cost on crossvalidation set
+        :param tolerance: minimum step of cost
+        :param verbose: logging
+        :return: values of cost in each of iterations, if cv_cost is set then also returned list of cv_goal values
+        """
         nlg_W = None
         nlg_a = None
         nlg_b = None
@@ -164,11 +223,13 @@ class RBM:
 
             # compute cost
             cost.append(np.sum(goal(input_data,
-                                    self.generate_input(self.compute_output(input_data, do_sampling=True), do_sampling=True))
+                                    self.generate_input(self.compute_output(input_data, do_sampling=True), do_sampling=True)) +
+                               (0.0 if regularization_norm is None else regularization_norm(self.W))
             ) / input_data.shape[0])
             if cv_input_data is not None:
                 cv_cost.append(np.sum(goal(cv_input_data,
-                                    self.generate_input(self.compute_output(cv_input_data, do_sampling=True), do_sampling=True))
+                                    self.generate_input(self.compute_output(cv_input_data, do_sampling=True), do_sampling=True)) +
+                                      (0.0 if regularization_norm is None else regularization_norm(self.W))
                 ) / cv_input_data.shape[0])
 
             t_total = time.clock() - t_start
