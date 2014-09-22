@@ -11,3 +11,9 @@ def l2(m):
 
 def d_l2(m):
     return m
+
+def elasticnet(m):
+    return l1(m) + l2(m)
+
+def d_elasticnet(m):
+    return d_l1(m) + d_l2(m)

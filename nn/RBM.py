@@ -60,6 +60,8 @@ class RBM:
         :param do_sampling: do binary sample or not
         :return: data representation in hidden space
         """
+        if len(input_data.shape) == 1:
+            input_data.shape = (1, input_data.shape[0])
         if self.use_biases:
             h = sigmoid(np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.b, self.W))))
         else:
