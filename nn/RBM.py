@@ -1,7 +1,7 @@
 import numpy as np
 import time
 from Functions import sigmoid
-from Distances import euclidian
+from Distances import *
 from Helpers import neuron_local_gain_update
 
 
@@ -107,6 +107,7 @@ class RBM:
               min_train_cost = np.finfo(float).eps,
               min_cv_cost = np.finfo(float).eps,
               tolerance=0,
+              is_sparse=False,
               verbose=True):
         """
         Train RBM with contrastive divergence algorithm
@@ -156,7 +157,8 @@ class RBM:
             np.random.shuffle(idx_data)
             idx_batch = range(0, len(idx_data), batch_size)
             for i_in_batch in idx_batch:
-                batch_data = input_data[idx_data[i_in_batch:(i_in_batch + batch_size)], :]
+                batch_data = input_data[idx_data[i_in_batch:(i_in_batch + batch_size)], :] if not is_sparse \
+                    else np.asarray(input_data[idx_data[i_in_batch:(i_in_batch + batch_size)], :].todense())
                 v = batch_data
                 nabla_W = np.zeros(self.W.shape)
                 nabla_a = np.zeros(self.a.shape)
@@ -224,23 +226,27 @@ class RBM:
                     last_delta_b = delta_b
 
             # compute cost
-            cost.append(np.sum(goal(input_data,
-                                    self.generate_input(self.compute_output(input_data, do_sampling=True), do_sampling=True)) +
-                               (0.0 if regularization_norm is None else regularization_norm(self.W))
-            ) / input_data.shape[0])
+            if not is_sparse:
+                cost.append(np.sum(goal(input_data,
+                                        self.generate_input(self.compute_output(input_data, do_sampling=True), do_sampling=True)) +
+                                   (0.0 if regularization_norm is None else regularization_norm(self.W))
+                ) / input_data.shape[0])
             if cv_input_data is not None:
-                cv_cost.append(np.sum(goal(cv_input_data,
-                                    self.generate_input(self.compute_output(cv_input_data, do_sampling=True), do_sampling=True)) +
+                cv_cost.append(np.sum(goal(np.asarray(cv_input_data.todense()),
+                                    self.generate_input(self.compute_output(np.asarray(cv_input_data.todense()), do_sampling=True), do_sampling=True))
+                                      +
                                       (0.0 if regularization_norm is None else regularization_norm(self.W))
                 ) / cv_input_data.shape[0])
 
             t_total = time.clock() - t_start
 
             if verbose:
-                if len(cv_cost) > 0:
+                if len(cost) > 0 and len(cv_cost) > 0:
                     print('Iteration: %s (%s s), train/cv cost: %s / %s' % (n_iter, t_total, cost[-1], cv_cost[-1]))
-                else:
+                elif len(cost) > 0:
                     print('Iteration: %s (%s s), train cost = %s' % (n_iter, t_total, cost[-1]))
+                elif len(cv_cost) > 0:
+                    print('Iteration: %s (%s s), train cv_cost = %s' % (n_iter, t_total, cv_cost[-1]))
 
             if n_iter > n_iter_stop_skip:
                 if len(cv_cost) > 0:
@@ -249,7 +255,7 @@ class RBM:
                 else:
                     if (1 - stop_threshold) * cost[-1] > min(cost):
                         break
-                if cost[-1] <= min_train_cost:
+                if len(cost) > 0 and cost[-1] <= min_train_cost:
                     break
                 if len(cv_cost) > 0 and cv_cost[-1] <= min_cv_cost:
                     break
