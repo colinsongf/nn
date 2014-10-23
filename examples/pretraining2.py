@@ -22,8 +22,7 @@ if __name__ == '__main__':
 
     rbm = RBM(x.shape[1], 100,
               rng=(lambda n: np.random.normal(0, 0.001, n)),
-              mode='gaus-bin',
-              use_biases=True)
+              mode='gaus-bin')
 
     print(rbm)
 

@@ -36,8 +36,7 @@ if __name__ == '__main__':
         #     train_output = np.vstack([train_output, o])
 
     rbm = RBM(841, 100,
-              rng=(lambda n: np.random.normal(0, 0.001, n)),
-              use_biases=True)
+              rng=(lambda n: np.random.normal(0, 0.001, n)))
 
     print(rbm)
 

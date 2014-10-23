@@ -14,7 +14,6 @@ class RBM:
     a = None # biases of visible layer
     b = None # biases of hidden layer
     mode = 'bin-bin'
-    use_biases = True
 
     def __str__(self):
         return "RBM: " + str(self.W.shape[0]) + ' <-> ' + str(self.W.shape[1])
@@ -25,7 +24,6 @@ class RBM:
                  hidden_size,
                  rng=(lambda n: np.random.normal(0, 0.1, n)),
                  mode='bin-bin', # gaus-bin (gaussian <-> bernoulli), bin-bin (bernoulli <-> bernoulli or binary-binary)
-                 use_biases=True
     ):
         """
         Initialization of RBM
@@ -39,7 +37,6 @@ class RBM:
         self.W = rng(visible_size * hidden_size).reshape((visible_size, hidden_size))
         self.a = rng(visible_size)
         self.b = rng(hidden_size)
-        self.use_biases = use_biases
         if mode not in ['bin-bin', 'gaus-bin']:
             raise Exception('unsupported mode')
         else:
@@ -62,10 +59,7 @@ class RBM:
         """
         if len(input_data.shape) == 1:
             input_data.shape = (1, input_data.shape[0])
-        if self.use_biases:
-            h = sigmoid(np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.b, self.W))))
-        else:
-            h = sigmoid(np.dot(input_data, self.W))
+        h = sigmoid(np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.b, self.W))))
         if do_sampling:
             h = self.sample(h)
         return h
@@ -80,10 +74,7 @@ class RBM:
         """
         if self.mode == 'gaus-bin':
             return np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.a, self.W.T)))
-        if self.use_biases:
-            v = sigmoid(np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.a, self.W.T))))
-        else:
-            v = sigmoid(np.dot(input_data, self.W.T))
+        v = sigmoid(np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.a, self.W.T))))
         if do_sampling:
             v = self.sample(v)
         return v
@@ -101,7 +92,6 @@ class RBM:
               regularization_rate = 0.1,
               regularization_norm = None,
               d_regularization_norm = None,
-              neural_local_gain = None,
               do_visible_sampling=False,
               n_iter_stop_skip=10,
               min_train_cost = np.finfo(float).eps,
@@ -138,14 +128,6 @@ class RBM:
         :param verbose: logging
         :return: values of cost in each of iterations, if cv_cost is set then also returned list of cv_goal values
         """
-        nlg_W = None
-        nlg_a = None
-        nlg_b = None
-        if neural_local_gain is not None:
-            nlg_bonus, nlg_penalty, nlg_min, nlg_max = neural_local_gain
-            nlg_W = np.ones(self.W.shape)
-            nlg_a = np.ones(self.a.shape)
-            nlg_b = np.ones(self.b.shape)
         cost = []
         cv_cost = []
         last_delta_W = np.zeros(self.W.shape)
@@ -168,24 +150,21 @@ class RBM:
                     if k == cd_k:
                         # accumulate negative phase
                         nabla_W -= np.dot(v.T, h)
-                        if self.use_biases:
-                            if self.mode == 'bin-bin':
-                                nabla_a -= np.sum(v, axis=0)
-                            elif self.mode == 'gaus-bin':
-                                nabla_a -= np.sum(np.repeat(self.a, v.shape[0]).reshape((v.shape[0], v.shape[1]), order='F'), axis=0)
-                            nabla_b -= np.sum(h, axis=0)
+                        if self.mode == 'bin-bin':
+                            nabla_a -= np.sum(v, axis=0)
+                        elif self.mode == 'gaus-bin':
+                            nabla_a -= np.sum(np.repeat(self.a, v.shape[0]).reshape((v.shape[0], v.shape[1]), order='F'), axis=0)
+                        nabla_b -= np.sum(h, axis=0)
                         break
                     h = self.sample(h)
                     if k == 0:
                         # accumulate positive phase
                         nabla_W += np.dot(v.T, h)
-                        if self.use_biases:
-                            if self.mode == 'bin-bin':
-                                nabla_a += np.sum(v, axis=0)
-                            elif self.mode == 'gaus-bin':
-                                nabla_a += np.sum(np.repeat(self.a, v.shape[0]).reshape((v.shape[0], v.shape[1]), order='F'), axis=0)
-                            nabla_b += np.sum(h, axis=0)
-
+                        if self.mode == 'bin-bin':
+                            nabla_a += np.sum(v, axis=0)
+                        elif self.mode == 'gaus-bin':
+                            nabla_a += np.sum(np.repeat(self.a, v.shape[0]).reshape((v.shape[0], v.shape[1]), order='F'), axis=0)
+                        nabla_b += np.sum(h, axis=0)
                     v = self.generate_input(h, do_sampling=False)
                     if do_visible_sampling:
                         v = self.sample(v)
@@ -195,35 +174,25 @@ class RBM:
 
                 # update weights
                 regularization_penalty = 0.0 if d_regularization_norm is None else d_regularization_norm(self.W)
-                delta_W = (learning_rate if nlg_W is None else learning_rate * nlg_W) * (
+                delta_W = learning_rate  * (
                     momentum_rate * last_delta_W +
                     nabla_W -
                     (0.0 if d_regularization_norm is None else regularization_rate * regularization_penalty)
                 )
-                if nlg_W is not None:
-                        c = delta_W * last_delta_W >= 0
-                        nlg_W = neuron_local_gain_update(nlg_W, c, nlg_bonus, nlg_penalty, nlg_min, nlg_max)
                 self.W += delta_W
                 last_delta_W = delta_W
-                if self.use_biases:
-                    delta_a = (learning_rate if nlg_a is None else learning_rate * nlg_a) * (
-                        momentum_rate * last_delta_a +
-                        nabla_a
-                    )
-                    if nlg_a is not None:
-                        c = delta_a * last_delta_a >= 0
-                        nlg_a = neuron_local_gain_update(nlg_a, c, nlg_bonus, nlg_penalty, nlg_min, nlg_max)
-                    self.a += delta_a
-                    last_delta_a = delta_a
-                    delta_b = (learning_rate if nlg_b is None else learning_rate * nlg_b) * (
-                        momentum_rate * last_delta_b +
-                        nabla_b
-                    )
-                    if nlg_b is not None:
-                        c = delta_b * last_delta_b >= 0
-                        nlg_b = neuron_local_gain_update(nlg_b, c, nlg_bonus, nlg_penalty, nlg_min, nlg_max)
-                    self.b += delta_b
-                    last_delta_b = delta_b
+                delta_a = learning_rate * (
+                    momentum_rate * last_delta_a +
+                    nabla_a
+                )
+                self.a += delta_a
+                last_delta_a = delta_a
+                delta_b = learning_rate * (
+                    momentum_rate * last_delta_b +
+                    nabla_b
+                )
+                self.b += delta_b
+                last_delta_b = delta_b
 
             # compute cost
             if not is_sparse:
