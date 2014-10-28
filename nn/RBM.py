@@ -37,7 +37,7 @@ class RBM:
         self.W = rng(visible_size * hidden_size).reshape((visible_size, hidden_size))
         self.a = rng(visible_size)
         self.b = rng(hidden_size)
-        if mode not in ['bin-bin', 'gaus-bin']:
+        if mode not in ['bin-bin', 'gaus-bin', 'pois-bin']:
             raise Exception('unsupported mode')
         else:
             self.mode = mode
@@ -65,7 +65,7 @@ class RBM:
         return h
 
 
-    def generate_input(self, input_data, do_sampling=False):
+    def generate_input(self, input_data, do_sampling=False, pois_N=None):
         """
         Restore input data using hidden space representation
         :param input_data: data representation in hidden space
@@ -74,6 +74,12 @@ class RBM:
         """
         if self.mode == 'gaus-bin':
             return np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.a, self.W.T)))
+        elif self.mode == 'pois-bin':
+            e = np.exp(np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.a, self.W.T))))
+            if pois_N is None:
+                return (e.T/np.sum(e, axis=1)).T
+            else:
+                return (e.T/((1/pois_N) * np.sum(e, axis=1))).T
         v = sigmoid(np.dot(np.c_[np.ones(input_data.shape[0]), input_data], np.vstack((self.a, self.W.T))))
         if do_sampling:
             v = self.sample(v)
@@ -142,6 +148,8 @@ class RBM:
                 batch_data = input_data[idx_data[i_in_batch:(i_in_batch + batch_size)], :] if not is_sparse \
                     else np.asarray(input_data[idx_data[i_in_batch:(i_in_batch + batch_size)], :].todense())
                 v = batch_data
+                if self.mode == "pois-bin":
+                    pois_N = np.sum(v, axis=1)
                 nabla_W = np.zeros(self.W.shape)
                 nabla_a = np.zeros(self.a.shape)
                 nabla_b = np.zeros(self.b.shape)
@@ -165,7 +173,7 @@ class RBM:
                         elif self.mode == 'gaus-bin':
                             nabla_a += np.sum(np.repeat(self.a, v.shape[0]).reshape((v.shape[0], v.shape[1]), order='F'), axis=0)
                         nabla_b += np.sum(h, axis=0)
-                    v = self.generate_input(h, do_sampling=False)
+                    v = self.generate_input(h, do_sampling=False, pois_N=pois_N)
                     if do_visible_sampling:
                         v = self.sample(v)
                 nabla_W /= batch_size
