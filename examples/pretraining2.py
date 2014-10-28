@@ -1,8 +1,11 @@
+import sys
+sys.path.append('./../nn/')
+
 import numpy as np
 from pandas import read_csv
-from nn.MLP import MLP, sigmoid, d_sigmoid, d_identity, identity, tanh, d_tanh, mcrmse, xeuclidian, d_xeuclidian, hamming, euclidian
-from nn.RBM import RBM
-from nn.Norms import l2, d_l2, l1, d_l1
+from nn.nn.MLP import MLP, sigmoid, d_sigmoid, d_identity, identity, tanh, d_tanh, mcrmse, xeuclidian, d_xeuclidian, hamming, euclidian
+from nn.nn.RBM import RBM
+from nn.nn.Norms import l2, d_l2, l1, d_l1
 
 
 if __name__ == '__main__':
